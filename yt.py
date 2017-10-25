@@ -121,16 +121,54 @@ def room_name(bot,update):
 def category(bot,update):
     global categoryDict
     global inputCategory
-
-    #inputcategory=update.callback_query.data
-    query = update.callback_query
-    bot.edit_message_text(text="Selected option: {}".format(query.data),
+    schedule = [1,2,3,4]
+    keyboard = [
+        [InlineKeyboardButton(u"Now", callback_data=str(schedule[0]))],
+        [InlineKeyboardButton(u"Within 1 hour", callback_data=str(schedule[1]))],
+        [InlineKeyboardButton(u"Within 12 hours", callback_data=str(schedule[2]))],
+        [InlineKeyboardButton(u"Next day", callback_data=str(schedule[3]))]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query=update.callback_query
+    inputcategory=query.data
+    
+    bot.edit_message_text(text="You have selected: {}".format(inputcategory) + "\n Please enter showtime",
                           chat_id=query.message.chat_id,
                           message_id=query.message.message_id)
+     
+    bot.edit_message_reply_markup(
+        chat_id=query.message.chat_id,
+        message_id=query.message.message_id,
+        reply_markup=reply_markup
+    )
+    
     return SHOWTIME
 
 def showtime(bot,update):
-    return
+    query=update.callback_query
+    bot.send_message(chat_id = query.message.chat_id, 
+                            text = "I'm opening room for you, please hang on.")
+    chrome_options = Options() 
+    chrome_options.add_argument("--headless")
+    if os.name == "nt":
+            driver = webdriver.Chrome(executable_path="chromedriver.exe", chrome_options = chrome_options)
+    elif os.name == "posix":
+            driver = webdriver.Chrome("./chromedriver" , chrome_options = chrome_options)
+    driver.wait = WebDriverWait(driver, 5)
+
+    driver.get('https://www.watch2gether.com') #going to site
+    driver.find_element_by_css_selector('.ui.primary.button').click()
+    room_url = driver.current_url
+    driver.quit()
+
+    keyboard = [[InlineKeyboardButton("Room Url", room_url)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.send_message(chat_id = query.message.chat_id, text = 'Your room is ready', reply_markup = reply_markup)
+
+    create_time = update.message.date
+    creater = update.message.chat['first_name'] + update.message.chat['last_name']
+
+    data_store(create_time, room_url, creater)
 
 def view_room(bot,update):
     global categoryDict
@@ -163,7 +201,8 @@ def main():
         states={
             ROOMNAME:[MessageHandler(Filters.text,room_name)],
             CATEGORY:[CallbackQueryHandler(category)],
-            SHOWTIME:[RegexHandler('^((Today)|(Tommorow)) ([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$',showtime)]
+            #SHOWTIME:[RegexHandler('^((Today)|(Tommorow)) ([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$',showtime)]
+            SHOWTIME:[CallbackQueryHandler(showtime)]
         },
 
         fallbacks=[CommandHandler('cancel',cancel)]
