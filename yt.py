@@ -240,7 +240,7 @@ def main():
     initDB()
     getCategoryDict()
     
-    updater = Updater(token = '348146373:AAFrE3HcwhAdBLb0Cvt4RJN2tUUDpUVcX64')
+    updater = Updater(token = '462315757:AAEI7Rj_efTi4nCZxT2qGY029btSmkKB2Yo')
     
     create_conversation=ConversationHandler(
         entry_points=[CommandHandler('createroom',create_room)],
