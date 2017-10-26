@@ -79,8 +79,8 @@ def start(bot,update):
     update.message.reply_text(
         'Hi! I am PUVGbot, feel lonely when you watch video alone? We are here for you :)\n'
 		'By creating a room, you can send a link to your friends who would like to watch a video with you \n'
-		'No friends? No worries :), you can join other rooms and share your ideas with them :)'
-		'Please select the follwoing command \n \n'
+		'No friends? No worries , you can join other rooms and share your ideas with them :) \n'
+		'Please select the following commands \n \n'
         '<a>/createroom</a> - Create a room and set showtime\n'
         '<a>/viewroom</a>   - View available room\n',
         parse_mode='html',
