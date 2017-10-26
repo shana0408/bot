@@ -77,7 +77,7 @@ def getCategoryDict():
 
 def start(bot,update):
     update.message.reply_text(
-        'Hi! I am Watch2gether Bot, pleasure to serve you.\n'
+        'Hi! I am PUVGbot, pleasure to serve you.\n'
         '<a>/createroom</a> - Create a room and set showtime\n'
         '<a>/viewroom</a>   - View available room\n',
         parse_mode='html',
