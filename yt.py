@@ -25,11 +25,13 @@ def initDB():
         cursor=conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS TB_ROOM
-            (PK_ROOMID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-            DATE_CREATED DATETIME NOT NULL,
-            URL TEXT NOT NULL,
-            CODE_CATEGORY NOT NULL,
-            CREATER TEXT NOT NULL)
+            (
+            PK_ROOMID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            ROOMNAME TEXT NOT NULL,
+            CODE_CATEGORY TEXT NOT NULL,
+            SHOWTIME DATE NOT NULL,
+            URL TEXT NOT NULL
+            )
             ''')
                 
         cursor.execute('''CREATE TABLE IF NOT EXISTS TB_CODE_CATEGORY
@@ -83,7 +85,7 @@ def start(bot,update):
     )
 
 def create_room(bot,update):
-    global intputRoomName
+    global inputRoomName
     global inputCategory
     global inputShowTime
     inputRoomName=''
@@ -98,56 +100,70 @@ def create_room(bot,update):
 
 def room_name(bot,update):
     global inputRoomName
+    global inputCategory
+    global inputShowTime
     global categoryDict
     
     inputRoomName=update.message.text
     
-    #reply_keyboard=[]
     keyboard = []
     
     for i in categoryDict.keys():
-        #reply_keyboard.append([InlineKeyboardButton(categoryDict[i],callback_data=i)])
         keyboard.append([InlineKeyboardButton(categoryDict[i],callback_data=i)])
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text(
         'I see! Let\'s call your room [<b>'+inputRoomName+'</b>]\n'
         'Now choose one of the category from below',
         parse_mode='html',
-        #reply_markup=InlineKeyboardMarkup(reply_keyboard)
         reply_markup = reply_markup
     )
     return CATEGORY
 
 def category(bot,update):
-    global categoryDict
+    global inputRoomName
     global inputCategory
-    schedule = [1,2,3,4]
-    keyboard = [
-        [InlineKeyboardButton(u"Now", callback_data=str(schedule[0]))],
-        [InlineKeyboardButton(u"Within 1 hour", callback_data=str(schedule[1]))],
-        [InlineKeyboardButton(u"Within 12 hours", callback_data=str(schedule[2]))],
-        [InlineKeyboardButton(u"Next day", callback_data=str(schedule[3]))]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    global inputShowTime
+    global categoryDict
+
     query=update.callback_query
-    inputcategory=query.data
+    inputCategory=query.data
     
-    bot.edit_message_text(text="You have selected: {}".format(inputcategory) + "\n Please enter showtime",
-                          chat_id=query.message.chat_id,
-                          message_id=query.message.message_id)
-     
-    bot.edit_message_reply_markup(
-        chat_id=query.message.chat_id,
-        message_id=query.message.message_id,
-        reply_markup=reply_markup
+    update.callback_query.message.reply_text(
+        'Ah! It is a <b>'+categoryDict.get(inputCategory)+'</b> video\n'
+        'Okay, tell me what time the show start\n'
+        '(Today/Tomorrow HH:MM)',
+        parse_mode='html'
     )
     
     return SHOWTIME
 
 def showtime(bot,update):
-    query=update.callback_query
-    bot.send_message(chat_id = query.message.chat_id, 
-                            text = "I'm opening room for you, please hang on.")
+    global inputRoomName
+    global inputCategory
+    global inputShowTime
+    global categoryDict
+
+    datetimeString=update.message.text
+    
+    day, time=datetimeString.split(' ')
+
+    if(day=='Tomorrow'):
+        inputShowTime=datetime.datetime.today() + datetime.timedelta(days=1)
+    elif(day=='Today'):
+        inputShowTime=datetime.datetime.today()
+
+    hr, mi=time.split(':')
+
+    inputShowTime=inputShowTime.replace(hour=int(hr), minute=int(mi))
+    
+    update.message.reply_text(
+        'Room    : <b>'+inputRoomName+'</b>\n'
+        'Category: <b>'+categoryDict.get(inputCategory)+'</b>\n'
+        'Showtime: <b>'+datetimeString+'</b>\n'
+        'I\'m opening room for you, please hang on...',
+        parse_mode='html'
+    )
+    
     chrome_options = Options() 
     chrome_options.add_argument("--headless")
     if os.name == "nt":
@@ -161,30 +177,61 @@ def showtime(bot,update):
     room_url = driver.current_url
     driver.quit()
 
-    keyboard = [[InlineKeyboardButton("Room Url", room_url)]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    bot.send_message(chat_id = query.message.chat_id, text = 'Your room is ready', reply_markup = reply_markup)
+    update.message.reply_text(
+        'RoomURL : <a>'+room_url+'</a>\n',
+        parse_mode='html'
+    )
+    
+    data_store(inputRoomName,inputCategory,inputShowTime,room_url)
 
-    create_time = update.message.date
-    creater = update.message.chat['first_name'] + update.message.chat['last_name']
+    return ConversationHandler.END
 
-    data_store(create_time, room_url, creater)
+def data_store(inputRoomName,inputCategory,inputShowTime,room_url):
+    try:
+        conn = sqlite3.connect("watch2gether.db")
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO TB_ROOM(ROOMNAME,CODE_CATEGORY,SHOWTIME,URL) VALUES (?,?,?,?);",(inputRoomName,inputCategory,inputShowTime,room_url))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(e)
 
 def view_room(bot,update):
     global categoryDict
-    
-    inputRoomName=update.message.text
     
     reply_keyboard=[]
     for i in categoryDict.keys():
         reply_keyboard.append([InlineKeyboardButton(categoryDict[i],callback_data=i)])
         
     update.message.reply_text(
-        'Please select your favourite category',
-        parse_mode='html',
+        'Which category you would like to browse',
         reply_markup=InlineKeyboardMarkup(reply_keyboard)
     )
     return CATEGORY
+
+def view_category(bot,update):
+    global categoryDict
+
+    text=''
+    
+    query=update.callback_query
+    inputCategory=query.data
+    try:
+        conn = sqlite3.connect("watch2gether.db")
+        cursor = conn.cursor()
+        
+        for row in cursor.execute('SELECT * FROM TB_ROOM WHERE CODE_CATEGORY=?',(inputCategory,)):
+            text+='Room    : <b>'+row[1]+'</b>\n'+'Category: <b>'+categoryDict.get(row[2])+'</b>\n'+'Showtime: <b>'+row[3]+'</b>\n'+'RoomURL : <a>'+row[4]+'</a>\n'
+            text+='\n'
+    except Exception as e:
+        print(e)
+        
+    update.callback_query.message.reply_text(
+        text,
+        parse_mode='html'
+    )
+
+    return ConversationHandler.END
 
 def cancel(bot,udpate):
     return
@@ -193,7 +240,7 @@ def main():
     initDB()
     getCategoryDict()
     
-    updater = Updater(token = '441243370:AAFADtpDKCcfVxdlmvnuY36fVhDQPeU3cJM')
+    updater = Updater(token = '348146373:AAFrE3HcwhAdBLb0Cvt4RJN2tUUDpUVcX64')
     
     create_conversation=ConversationHandler(
         entry_points=[CommandHandler('createroom',create_room)],
@@ -201,8 +248,7 @@ def main():
         states={
             ROOMNAME:[MessageHandler(Filters.text,room_name)],
             CATEGORY:[CallbackQueryHandler(category)],
-            #SHOWTIME:[RegexHandler('^((Today)|(Tommorow)) ([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$',showtime)]
-            SHOWTIME:[CallbackQueryHandler(showtime)]
+            SHOWTIME:[RegexHandler('^((Today)|(Tomorrow)) ([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$',showtime)]
         },
 
         fallbacks=[CommandHandler('cancel',cancel)]
@@ -212,7 +258,7 @@ def main():
         entry_points=[CommandHandler('viewroom',view_room)],
 
         states={
-            CATEGORY:[CallbackQueryHandler(category)]
+            CATEGORY:[CallbackQueryHandler(view_category)]
         },
 
         fallbacks=[CommandHandler('cancel',cancel)]
